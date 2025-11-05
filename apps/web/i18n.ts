@@ -7,7 +7,7 @@ import plTranslations from "app/locales/pl/translation.json";
 // eslint-disable-next-line import/no-named-as-default-member
 i18n.use(initReactI18next).init({
   fallbackLng: "en",
-  lng: import.meta.env.VITE_E2E === "true" ? "en" : "pl",
+  lng: "en",
   ns: ["translation"],
   defaultNS: "translation",
   interpolation: {
