@@ -29,10 +29,17 @@ export class AnnouncementsController {
   @Get()
   @Roles(...Object.values(USER_ROLES))
   @Validate({
+    request: [
+      { type: "query", name: "page", schema: Type.Optional(Type.Number({ minimum: 1 })) },
+      { type: "query", name: "perPage", schema: Type.Optional(Type.Number({ minimum: 1, maximum: 100 })) },
+    ],
     response: baseResponse(allAnnouncementsSchema),
   })
-  async getAllAnnouncements() {
-    const announcements = await this.announcementsService.getAllAnnouncements();
+  async getAllAnnouncements(
+    @Query("page") page?: number,
+    @Query("perPage") perPage?: number,
+  ) {
+    const announcements = await this.announcementsService.getAllAnnouncements(page, perPage);
 
     return new BaseResponse(announcements);
   }
@@ -69,6 +76,8 @@ export class AnnouncementsController {
       { type: "query", name: "authorName", schema: Type.Optional(Type.String()) },
       { type: "query", name: "search", schema: Type.Optional(Type.String()) },
       { type: "query", name: "isRead", schema: Type.Optional(Type.String()) },
+      { type: "query", name: "page", schema: Type.Optional(Type.Number({ minimum: 1 })) },
+      { type: "query", name: "perPage", schema: Type.Optional(Type.Number({ minimum: 1, maximum: 100 })) },
     ],
     response: baseResponse(announcementsForUserSchema),
   })
@@ -78,6 +87,8 @@ export class AnnouncementsController {
     @Query("authorName") authorName?: string,
     @Query("search") search?: string,
     @Query("isRead") isRead?: string,
+    @Query("page") page?: number,
+    @Query("perPage") perPage?: number,
     //@ts-expect-error - userId is required and has to be last because of the validator
     @CurrentUser("userId") userId: UUIDType,
   ) {
@@ -89,7 +100,7 @@ export class AnnouncementsController {
       isRead: isRead ? isRead === "true" : undefined,
     };
 
-    const announcements = await this.announcementsService.getAnnouncementsForUser(userId, filters);
+    const announcements = await this.announcementsService.getAnnouncementsForUser(userId, filters, page, perPage);
 
     return new BaseResponse(announcements);
   }

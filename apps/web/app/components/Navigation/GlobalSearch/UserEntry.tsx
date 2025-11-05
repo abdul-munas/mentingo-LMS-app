@@ -22,11 +22,11 @@ export const UserEntry = ({
       onClick={onSelect}
       className="group focus:outline-none focus-visible:outline-none"
     >
-      <li className="flex items-center gap-3 rounded-md px-[8px] py-[6px] text-sm text-neutral-900 hover:bg-primary-50 group-focus:bg-primary-100">
+      <li className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm text-neutral-900 hover:bg-primary-50 group-focus:bg-primary-100">
         <img
           src={item?.profilePictureUrl ?? ""}
           alt={item.firstName}
-          className="size-4 rounded-full bg-[#D9D9D9]"
+          className="size-4 rounded-full bg-neutral-300"
         />
         <span className="line-clamp-1 flex-1">
           {item.firstName} {item.lastName}

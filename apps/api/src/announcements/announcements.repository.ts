@@ -4,6 +4,7 @@ import {
   and,
   getTableColumns,
   countDistinct,
+  count,
   isNotNull,
   sql,
   not,
@@ -13,6 +14,7 @@ import {
 } from "drizzle-orm";
 
 import { DatabasePg } from "src/common";
+import { DEFAULT_PAGE_SIZE } from "src/common/pagination";
 import {
   announcements,
   groupAnnouncements,
@@ -20,6 +22,7 @@ import {
   userAnnouncements,
   users,
 } from "src/storage/schema";
+import { S3Service } from "src/s3/s3.service";
 import { USER_ROLES } from "src/user/schemas/userRoles";
 import { UserService } from "src/user/user.service";
 
@@ -37,9 +40,12 @@ export class AnnouncementsRepository {
   constructor(
     @Inject("DB") private readonly db: DatabasePg,
     private readonly userService: UserService,
+    private readonly s3Service: S3Service,
   ) {}
 
-  async getAllAnnouncements() {
+  async getAllAnnouncements(page: number = 1, perPage: number = DEFAULT_PAGE_SIZE) {
+    const offset = (page - 1) * perPage;
+
     const announcementsData = await this.db
       .select({
         ...getTableColumns(announcements),
@@ -47,9 +53,22 @@ export class AnnouncementsRepository {
       })
       .from(announcements)
       .leftJoin(users, eq(announcements.authorId, users.id))
-      .orderBy(desc(announcements.createdAt));
+      .orderBy(desc(announcements.createdAt))
+      .limit(perPage)
+      .offset(offset);
 
-    return await this.mapAnnouncementsWithProfilePictures(announcementsData);
+    const [{ totalItems }] = await this.db
+      .select({ totalItems: count() })
+      .from(announcements);
+
+    return {
+      data: await this.mapAnnouncementsWithProfilePictures(announcementsData),
+      pagination: {
+        totalItems,
+        page,
+        perPage,
+      },
+    };
   }
 
   async getLatestUnreadAnnouncements(userId: UUIDType) {
@@ -136,7 +155,14 @@ export class AnnouncementsRepository {
       .returning();
   }
 
-  async getAnnouncementsForUser(userId: UUIDType, filters?: AnnouncementFilters) {
+  async getAnnouncementsForUser(
+    userId: UUIDType,
+    filters?: AnnouncementFilters,
+    page: number = 1,
+    perPage: number = DEFAULT_PAGE_SIZE,
+  ) {
+    const offset = (page - 1) * perPage;
+
     const baseQuery = this.db
       .select({
         ...getTableColumns(announcements),
@@ -154,12 +180,35 @@ export class AnnouncementsRepository {
       .leftJoin(users, eq(announcements.authorId, users.id));
 
     const filterConditions = this.getFiltersConditions(filters);
+    const whereConditions = and(isNotNull(userAnnouncements.userId), ...(filterConditions as any));
 
     const announcementsData = await baseQuery
-      .where(and(isNotNull(userAnnouncements.userId), ...(filterConditions as any)))
-      .orderBy(desc(announcements.createdAt));
+      .where(whereConditions)
+      .orderBy(desc(announcements.createdAt))
+      .limit(perPage)
+      .offset(offset);
 
-    return await this.mapAnnouncementsWithProfilePictures(announcementsData);
+    const [{ totalItems }] = await this.db
+      .select({ totalItems: count() })
+      .from(announcements)
+      .leftJoin(
+        userAnnouncements,
+        and(
+          eq(announcements.id, userAnnouncements.announcementId),
+          eq(userAnnouncements.userId, userId),
+        ),
+      )
+      .leftJoin(users, eq(announcements.authorId, users.id))
+      .where(whereConditions);
+
+    return {
+      data: await this.mapAnnouncementsWithProfilePictures(announcementsData),
+      pagination: {
+        totalItems,
+        page,
+        perPage,
+      },
+    };
   }
 
   private getFiltersConditions(filters?: AnnouncementFilters) {
@@ -210,13 +259,18 @@ export class AnnouncementsRepository {
   }
 
   async mapAnnouncementsWithProfilePictures(announcementsData: Announcement[]) {
-    return Promise.all(
-      announcementsData.map(async (announcement) => ({
-        ...announcement,
-        authorProfilePictureUrl: await this.userService.getUsersProfilePictureUrl(
-          announcement.authorProfilePictureUrl,
-        ),
-      })),
-    );
+    // Batch fetch all author profile pictures at once (optimized to prevent N+1 queries)
+    const avatarKeys = announcementsData
+      .map((announcement) => announcement.authorProfilePictureUrl)
+      .filter((key): key is string => !!key);
+
+    const avatarUrls = avatarKeys.length > 0 ? await this.s3Service.getSignedUrls(avatarKeys) : {};
+
+    return announcementsData.map((announcement) => ({
+      ...announcement,
+      authorProfilePictureUrl: announcement.authorProfilePictureUrl
+        ? avatarUrls[announcement.authorProfilePictureUrl] || null
+        : null,
+    }));
   }
 }

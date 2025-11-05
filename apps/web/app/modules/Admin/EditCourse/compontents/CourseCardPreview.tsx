@@ -16,7 +16,7 @@ const CourseCardPreview = ({ imageUrl, title, description, category }: CourseCar
   const { t } = useTranslation();
 
   return (
-    <Card className="w-3/10 border border-gray-200 p-6 shadow-md">
+    <Card className="w-3/10 border border-neutral-200 p-6 shadow-md">
       <CardHeader className="relative flex flex-col !gap-y-1">
         <h5 className="h5 text-neutral-950">{t("adminCourseView.settings.sideSection.header")}</h5>
         <p className="body-lg-md text-neutral-800">
@@ -29,12 +29,12 @@ const CourseCardPreview = ({ imageUrl, title, description, category }: CourseCar
             <CardHeader className="overflow-hidden rounded-t-lg p-0">
               <img
                 src={imageUrl || DefaultCoursePhoto}
-                alt="header"
+                alt={title ? `${title} course cover image` : "Course cover image"}
                 className="h-60 w-full object-cover"
               />
               {category && (
-                <div className="absolute left-3 top-3 flex items-center space-x-2 rounded-lg bg-white px-4 py-2 text-sm text-black shadow-md">
-                  <div className="size-1 rounded-full bg-black"></div>
+                <div className="absolute left-3 top-3 flex items-center space-x-2 rounded-lg bg-white px-4 py-2 text-sm text-neutral-900 shadow-md">
+                  <div className="size-1 rounded-full bg-neutral-900"></div>
                   <span>{category}</span>
                 </div>
               )}
@@ -45,7 +45,7 @@ const CourseCardPreview = ({ imageUrl, title, description, category }: CourseCar
               </h1>
               <UserProfile />
               <div
-                className="description line-clamp-3 break-words text-left text-gray-500"
+                className="description line-clamp-3 break-words text-left text-neutral-500"
                 dangerouslySetInnerHTML={{
                   __html:
                     description || t("adminCourseView.settings.sideSection.other.noDescription"),

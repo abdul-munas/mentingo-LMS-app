@@ -5,15 +5,20 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import type { Cache } from "cache-manager";
 
 @Injectable()
 export class S3Service {
   private s3Client: S3Client;
   private readonly bucketName: string;
+  private readonly CACHE_TTL = 3000; // 50 minutes (signed URLs valid for 1 hour)
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @Inject("CACHE_MANAGER") private cacheManager: Cache,
+  ) {
     const config = this.loadS3Config();
 
     this.s3Client = new S3Client({
@@ -70,12 +75,87 @@ export class S3Service {
   }
 
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    if (!key) {
+      return "";
+    }
+
+    // Check cache first
+    const cacheKey = `s3:signed-url:${key}`;
+    const cachedUrl = await this.cacheManager.get<string>(cacheKey);
+
+    if (cachedUrl) {
+      return cachedUrl;
+    }
+
+    // Generate new signed URL
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: key,
     });
 
-    return getSignedUrl(this.s3Client, command, { expiresIn });
+    const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
+
+    // Cache the signed URL (with TTL slightly less than expiry)
+    await this.cacheManager.set(cacheKey, signedUrl, this.CACHE_TTL);
+
+    return signedUrl;
+  }
+
+  /**
+   * Batch get signed URLs for multiple keys (optimized with caching)
+   * Reduces N+1 query problems when fetching multiple S3 URLs
+   */
+  async getSignedUrls(keys: string[], expiresIn: number = 3600): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+
+    // Filter out empty keys
+    const validKeys = keys.filter((key) => key && key.trim());
+
+    if (validKeys.length === 0) {
+      return result;
+    }
+
+    // Check cache for all keys first
+    const cacheKeys = validKeys.map((key) => `s3:signed-url:${key}`);
+    const cachedUrls = await Promise.all(
+      cacheKeys.map((cacheKey) => this.cacheManager.get<string>(cacheKey)),
+    );
+
+    // Identify which keys need to be generated
+    const keysToGenerate: string[] = [];
+    validKeys.forEach((key, index) => {
+      if (cachedUrls[index]) {
+        result[key] = cachedUrls[index]!;
+      } else {
+        keysToGenerate.push(key);
+      }
+    });
+
+    // Generate signed URLs for uncached keys in parallel
+    if (keysToGenerate.length > 0) {
+      const newUrls = await Promise.all(
+        keysToGenerate.map(async (key) => {
+          const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+          });
+          const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
+
+          // Cache the new URL
+          const cacheKey = `s3:signed-url:${key}`;
+          await this.cacheManager.set(cacheKey, signedUrl, this.CACHE_TTL);
+
+          return { key, signedUrl };
+        }),
+      );
+
+      // Add newly generated URLs to result
+      newUrls.forEach(({ key, signedUrl }) => {
+        result[key] = signedUrl;
+      });
+    }
+
+    return result;
   }
 
   async getFileContent(key: string): Promise<string> {

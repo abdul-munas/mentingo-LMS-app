@@ -9,8 +9,8 @@ import type { UUIDType } from "src/common";
 export class AnnouncementsService {
   constructor(private readonly announcementsRepository: AnnouncementsRepository) {}
 
-  async getAllAnnouncements() {
-    return await this.announcementsRepository.getAllAnnouncements();
+  async getAllAnnouncements(page?: number, perPage?: number) {
+    return await this.announcementsRepository.getAllAnnouncements(page, perPage);
   }
 
   async getLatestUnreadAnnouncements(userId: UUIDType) {
@@ -36,8 +36,8 @@ export class AnnouncementsService {
     return readAnnouncements;
   }
 
-  async getAnnouncementsForUser(userId: UUIDType, filters?: AnnouncementFilters) {
-    return await this.announcementsRepository.getAnnouncementsForUser(userId, filters);
+  async getAnnouncementsForUser(userId: UUIDType, filters?: AnnouncementFilters, page?: number, perPage?: number) {
+    return await this.announcementsRepository.getAnnouncementsForUser(userId, filters, page, perPage);
   }
 
   async createAnnouncement(createAnnouncementData: CreateAnnouncement, authorId: UUIDType) {

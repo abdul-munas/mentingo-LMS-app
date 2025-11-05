@@ -24,7 +24,7 @@ export const SearchInput = ({
   const { t } = useTranslation();
   return (
     <div className={cn("group relative max-w-2xl flex-grow", wrapperClassName)}>
-      <Search className="absolute left-2 top-1/2 size-5 -translate-y-1/2 transform text-neutral-800 transition-colors group-focus-within:text-primary-500" />
+      <Search className="absolute left-2 top-1/2 size-5 -translate-y-1/2 transform text-neutral-800 transition-colors group-focus-within:text-primary-500" aria-hidden="true" />
       <Input
         type="text"
         {...props}
@@ -37,14 +37,16 @@ export const SearchInput = ({
       />
       {rightAdornment}
       {clearable && props.value && props.value.length > 0 && (
-        <IconX
-          width={16}
-          height={16}
-          className="absolute end-2 top-1/2 -translate-y-1/2 transform cursor-pointer text-neutral-800"
+        <button
+          type="button"
+          aria-label={t("common.other.clearSearch") || "Clear search"}
+          className="absolute end-2 top-1/2 -translate-y-1/2 transform cursor-pointer text-neutral-800 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded"
           onClick={() =>
             props.onChange?.({ target: { value: "" } } as ChangeEvent<HTMLInputElement>)
           }
-        />
+        >
+          <IconX width={16} height={16} aria-hidden="true" />
+        </button>
       )}
     </div>
   );

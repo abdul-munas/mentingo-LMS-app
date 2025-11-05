@@ -23,7 +23,7 @@ export const CourseEntry = ({
         <img
           src={item?.thumbnailUrl ?? ""}
           alt={item.title}
-          className="size-4 rounded-sm bg-[#D9D9D9]"
+          className="size-4 rounded-sm bg-neutral-300"
         />
         <span className="line-clamp-1 flex-1 body-sm-md">{item.title}</span>
         <span className="details-md ps-3 text-neutral-600">{item.category}</span>

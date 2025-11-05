@@ -95,17 +95,22 @@ export class UserService {
       .where(and(...conditions))
       .orderBy(sortOrder(this.getColumnToSortBy(sortedField as UserSortField)));
 
-    const usersWithProfilePictures = await Promise.all(
-      usersData.map(async (user) => {
-        const { avatarReference, ...userWithoutAvatar } = user;
-        const usersProfilePictureUrl = await this.getUsersProfilePictureUrl(avatarReference);
+    // Batch fetch all profile picture URLs at once (optimized to prevent N+1 queries)
+    const avatarKeys = usersData
+      .map((user) => user.avatarReference)
+      .filter((key): key is string => !!key);
 
-        return {
-          ...userWithoutAvatar,
-          profilePictureUrl: usersProfilePictureUrl,
-        };
-      }),
-    );
+    const avatarUrls = avatarKeys.length > 0 ? await this.s3Service.getSignedUrls(avatarKeys) : {};
+
+    const usersWithProfilePictures = usersData.map((user) => {
+      const { avatarReference, ...userWithoutAvatar } = user;
+      const profilePictureUrl = avatarReference ? avatarUrls[avatarReference] || null : null;
+
+      return {
+        ...userWithoutAvatar,
+        profilePictureUrl,
+      };
+    });
 
     const [{ totalItems }] = await this.db
       .select({ totalItems: count() })

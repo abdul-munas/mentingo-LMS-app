@@ -182,22 +182,23 @@ export class CourseService {
     const paginatedQuery = addPagination(dynamicQuery, page, perPage);
     const data = await paginatedQuery;
 
-    const dataWithS3SignedUrls = await Promise.all(
-      data.map(async (item) => {
-        if (!item.thumbnailUrl) return item;
+    // Batch fetch all S3 URLs at once (optimized to prevent N+1 queries)
+    const thumbnailKeys = data
+      .map((item) => item.thumbnailUrl)
+      .filter((key): key is string => !!key);
+    const avatarKeys = data.map((item) => item.authorAvatarUrl).filter((key): key is string => !!key);
 
-        try {
-          const signedUrl = await this.fileService.getFileUrl(item.thumbnailUrl);
-          const authorAvatarSignedUrl = await this.userService.getUsersProfilePictureUrl(
-            item.authorAvatarUrl,
-          );
-          return { ...item, thumbnailUrl: signedUrl, authorAvatarUrl: authorAvatarSignedUrl };
-        } catch (error) {
-          console.error(`Failed to get signed URL for ${item.thumbnailUrl}:`, error);
-          return item;
-        }
-      }),
-    );
+    const allKeys = [...thumbnailKeys, ...avatarKeys];
+    const signedUrls =
+      allKeys.length > 0 ? await this.fileService.getFileUrls(allKeys) : ({} as Record<string, string>);
+
+    const dataWithS3SignedUrls = data.map((item) => ({
+      ...item,
+      thumbnailUrl: item.thumbnailUrl ? signedUrls[item.thumbnailUrl] || item.thumbnailUrl : null,
+      authorAvatarUrl: item.authorAvatarUrl
+        ? signedUrls[item.authorAvatarUrl] || item.authorAvatarUrl
+        : null,
+    }));
 
     const [{ totalItems }] = await this.db
       .select({ totalItems: countDistinct(courses.id) })

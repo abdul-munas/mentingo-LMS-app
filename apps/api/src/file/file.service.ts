@@ -39,6 +39,49 @@ export class FileService {
     return await this.s3Service.getSignedUrl(fileKey);
   }
 
+  /**
+   * Batch get file URLs for multiple keys (optimized with caching)
+   * Reduces N+1 query problems when fetching multiple file URLs
+   */
+  async getFileUrls(fileKeys: string[]): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+
+    // Separate keys by type (https, bunny, S3)
+    const httpsKeys: string[] = [];
+    const bunnyKeys: string[] = [];
+    const s3Keys: string[] = [];
+
+    fileKeys.forEach((key) => {
+      if (!key) return;
+      if (key.startsWith("https://")) {
+        httpsKeys.push(key);
+      } else if (key.startsWith("bunny-")) {
+        bunnyKeys.push(key);
+      } else {
+        s3Keys.push(key);
+      }
+    });
+
+    // Process HTTPS URLs (already signed, just return as-is)
+    httpsKeys.forEach((key) => {
+      result[key] = key;
+    });
+
+    // Process Bunny URLs
+    bunnyKeys.forEach((key) => {
+      const videoId = key.replace("bunny-", "");
+      result[key] = this.bunnyStreamService.getUrl(videoId);
+    });
+
+    // Batch fetch S3 URLs
+    if (s3Keys.length > 0) {
+      const s3Urls = await this.s3Service.getSignedUrls(s3Keys);
+      Object.assign(result, s3Urls);
+    }
+
+    return result;
+  }
+
   async uploadFile(file: Express.Multer.File, resource: string, options?: FileValidationOptions) {
     if (!file) {
       throw new BadRequestException("No file uploaded");

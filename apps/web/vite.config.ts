@@ -83,8 +83,27 @@ export default defineConfig(({ mode }) => {
         external: ["fsevents"],
         output: {
           manualChunks: (id) => {
+            // Separate vendor chunks for better caching
             if (id.includes("@remix-run")) {
               return "remix";
+            }
+            if (id.includes("@radix-ui")) {
+              return "radix";
+            }
+            if (id.includes("@tiptap")) {
+              return "editor";
+            }
+            if (id.includes("recharts")) {
+              return "charts";
+            }
+            if (id.includes("react-player")) {
+              return "video-player";
+            }
+            if (id.includes("@stripe")) {
+              return "stripe";
+            }
+            if (id.includes("node_modules")) {
+              return "vendor";
             }
           },
         },
